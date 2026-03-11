@@ -1,0 +1,48 @@
+@page "/"
+@inject IJSRuntime JS
+
+<PageTitle>IK - 3D Visualizer</PageTitle>
+
+<div class="viewport-container">
+    <canvas id="scene-canvas"></canvas>
+</div>
+
+@code {
+    // Line segment 1: from A to B
+    // Line segment 2: from B to C (connected at B)
+    private static readonly (float X, float Y, float Z) PointA = (-2, 0, 0);
+    private static readonly (float X, float Y, float Z) PointB = (0, 1.5f, 0.5f);
+    private static readonly (float X, float Y, float Z) PointC = (2, 0.5f, -1);
+
+    private const int Green = 0x00cc66;
+    private const int Yellow = 0xffdd00;
+    private const float NodeSize = 0.15f;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await JS.InvokeVoidAsync("scene3d.init", "scene-canvas");
+
+        // Draw two green lines connected at PointB
+        await JS.InvokeVoidAsync("scene3d.addLine",
+            PointA.X, PointA.Y, PointA.Z,
+            PointB.X, PointB.Y, PointB.Z,
+            Green);
+
+        await JS.InvokeVoidAsync("scene3d.addLine",
+            PointB.X, PointB.Y, PointB.Z,
+            PointC.X, PointC.Y, PointC.Z,
+            Green);
+
+        // Yellow cubes at endpoints and connection
+        await JS.InvokeVoidAsync("scene3d.addNode",
+            PointA.X, PointA.Y, PointA.Z, Yellow, NodeSize);
+
+        await JS.InvokeVoidAsync("scene3d.addNode",
+            PointB.X, PointB.Y, PointB.Z, Yellow, NodeSize);
+
+        await JS.InvokeVoidAsync("scene3d.addNode",
+            PointC.X, PointC.Y, PointC.Z, Yellow, NodeSize);
+    }
+}
