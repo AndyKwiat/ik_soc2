@@ -1,48 +1,111 @@
 @page "/"
 @inject IJSRuntime JS
+@implements IDisposable
 
 <PageTitle>IK - 3D Visualizer</PageTitle>
 
-<div class="viewport-container">
+<div class="viewport-container" @onkeydown="OnKeyDown" tabindex="0" @ref="_container">
     <canvas id="scene-canvas"></canvas>
 </div>
 
 @code {
-    // Line segment 1: from A to B
-    // Line segment 2: from B to C (connected at B)
-    private static readonly (float X, float Y, float Z) PointA = (-2, 0, 0);
-    private static readonly (float X, float Y, float Z) PointB = (0, 1.5f, 0.5f);
-    private static readonly (float X, float Y, float Z) PointC = (2, 0.5f, -1);
+    private ElementReference _container;
+
+    // Hip: user-controlled via keyboard
+    private Vec3 Hip = new Vec3(0, 3.5f, 0);
+    // Foot: fixed at origin
+    private Vec3 Foot = new Vec3(0, 0, 0);
+    // Knee: computed by IK solver
+    private Vec3 Knee;
+
+    // Bone lengths
+    private const float ThighLength = 1.8f;
+    private const float ShinLength = 2.0f;
+
+    // Pole vector: knee bends forward in +Z
+    private Vec3 PoleVector = new Vec3(0, 0, 1);
 
     private const int Green = 0x00cc66;
     private const int Yellow = 0xffdd00;
+    private const int Red = 0xff0000;
     private const float NodeSize = 0.15f;
+    private const float StepSize = 0.025f;
+
+    private DotNetObjectReference<Home>? _selfRef;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
 
         await JS.InvokeVoidAsync("scene3d.init", "scene-canvas");
+        await DrawScene();
 
-        // Draw two green lines connected at PointB
+        // Register global key listener so arrows work even when canvas has focus
+        _selfRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("scene3d.registerKeyHandler", _selfRef);
+    }
+
+    [JSInvokable]
+    public async Task OnKeyPress(string key)
+    {
+        switch (key)
+        {
+            case "ArrowUp":    Hip.Z -= StepSize; break;
+            case "ArrowDown":  Hip.Z += StepSize; break;
+            case "ArrowLeft":  Hip.X -= StepSize; break;
+            case "ArrowRight": Hip.X += StepSize; break;
+            case "u": case "U": Hip.Y += StepSize; break;
+            case "d": case "D": Hip.Y -= StepSize; break;
+            default: return;
+        }
+
+        await JS.InvokeVoidAsync("scene3d.clearScene");
+        await DrawScene();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        await OnKeyPress(e.Key);
+    }
+
+    private async Task DrawScene()
+    {
+        // Solve IK: Hip is root, Foot is target
+        var result = TwoBoneIk.Solve(Hip, Foot, PoleVector, ThighLength, ShinLength);
+        Knee = result.Mid;
+
+        // Draw bones (green lines)
         await JS.InvokeVoidAsync("scene3d.addLine",
-            PointA.X, PointA.Y, PointA.Z,
-            PointB.X, PointB.Y, PointB.Z,
+            Hip.X, Hip.Y, Hip.Z,
+            Knee.X, Knee.Y, Knee.Z,
             Green);
 
         await JS.InvokeVoidAsync("scene3d.addLine",
-            PointB.X, PointB.Y, PointB.Z,
-            PointC.X, PointC.Y, PointC.Z,
+            Knee.X, Knee.Y, Knee.Z,
+            result.End.X, result.End.Y, result.End.Z,
             Green);
 
-        // Yellow cubes at endpoints and connection
+        // Draw joint nodes (yellow cubes)
         await JS.InvokeVoidAsync("scene3d.addNode",
-            PointA.X, PointA.Y, PointA.Z, Yellow, NodeSize);
+            Hip.X, Hip.Y, Hip.Z, Yellow, NodeSize);
 
         await JS.InvokeVoidAsync("scene3d.addNode",
-            PointB.X, PointB.Y, PointB.Z, Yellow, NodeSize);
+            Knee.X, Knee.Y, Knee.Z, Yellow, NodeSize);
 
         await JS.InvokeVoidAsync("scene3d.addNode",
-            PointC.X, PointC.Y, PointC.Z, Yellow, NodeSize);
+            result.End.X, result.End.Y, result.End.Z, Yellow, NodeSize);
+
+        // Draw pole vector debug line (red, 0.5 length from knee)
+        var poleDir = PoleVector.Normalized();
+        var poleEnd = Knee + poleDir * 0.5f;
+        await JS.InvokeVoidAsync("scene3d.addLine",
+            Knee.X, Knee.Y, Knee.Z,
+            poleEnd.X, poleEnd.Y, poleEnd.Z,
+            Red);
+    }
+
+    public void Dispose()
+    {
+        _selfRef?.Dispose();
     }
 }

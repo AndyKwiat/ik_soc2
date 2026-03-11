@@ -19,10 +19,13 @@ ik/
 ├── Program.cs             # App entry point (no changes needed usually)
 ├── App.razor              # Router setup
 ├── _Imports.razor         # Global using directives for Razor
+├── IK/
+│   ├── Vec3.cs            # 3D vector struct with math operators
+│   └── TwoBoneIk.cs       # Two-bone IK solver (static class + result struct)
 ├── Layout/
 │   └── MainLayout.razor   # Minimal layout — just renders @Body
 ├── Pages/
-│   ├── Home.razor         # Main page — defines 3D points, calls JS interop
+│   ├── Home.razor         # Main page — IK leg sim, calls JS interop
 │   └── NotFound.razor     # 404 page
 ├── wwwroot/
 │   ├── index.html         # HTML shell — loads Three.js, OrbitControls, scene.js
@@ -33,7 +36,7 @@ ik/
 
 ## Architecture: How C# Talks to Three.js
 
-1. `Home.razor` defines points as C# tuples and calls `JS.InvokeVoidAsync(...)` in `OnAfterRenderAsync`
+1. `Home.razor` defines joints as `Vec3`, solves IK, and calls `JS.InvokeVoidAsync(...)` in `OnAfterRenderAsync`
 2. These calls invoke methods on the `window.scene3d` object defined in `wwwroot/js/scene.js`
 3. `scene.js` manages the Three.js scene, camera, renderer, and OrbitControls
 
@@ -68,6 +71,23 @@ dotnet watch run          # Dev server with hot reload
 dotnet build              # Build only
 dotnet publish -c Release # Publish static output
 ```
+
+## IK Solver
+
+- **Two-bone IK** in `IK/TwoBoneIk.cs` — solves Hip -> Knee -> Foot chain
+- **Vec3** in `IK/Vec3.cs` — lightweight 3D vector struct with operators
+- Bone lengths: thigh = 1.8, shin = 2.0
+- Pole vector `(0,0,1)` controls knee bend direction (+Z = forward)
+- Red debug line (0.5 length) drawn from knee in pole vector direction
+
+## Key Bindings
+
+| Key | Action |
+|-----|--------|
+| Arrow Up / Down | Move hip in -Z / +Z |
+| Arrow Left / Right | Move hip in -X / +X |
+| U | Move hip up (+Y) |
+| D | Move hip down (-Y) |
 
 ## Key Conventions
 

@@ -88,6 +88,16 @@ window.scene3d = {
         }
     },
 
+    registerKeyHandler: function (dotnetRef) {
+        window.addEventListener("keydown", function (e) {
+            var handled = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "u", "d", "U", "D"];
+            if (handled.indexOf(e.key) !== -1) {
+                e.preventDefault();
+                dotnetRef.invokeMethodAsync("OnKeyPress", e.key);
+            }
+        });
+    },
+
     _animate: function () {
         const self = this;
         function loop() {
